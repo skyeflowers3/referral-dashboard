@@ -1,0 +1,35 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Fraunces", ui-serif, Georgia, serif;
+  --color-ink: #1a2332;
+  --color-ink-muted: #5a6a7e;
+  --color-surface: #f6f3ee;
+  --color-surface-elevated: #ffffff;
+  --color-line: #e2ddd4;
+  --color-accent: #0d6e6e;
+  --color-accent-soft: #e6f3f3;
+  --color-accent-strong: #0a5555;
+  --color-warn: #b45309;
+  --color-success: #15803d;
+  --color-info: #1d4ed8;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  color: var(--color-ink);
+  background:
+    radial-gradient(ellipse 80% 50% at 10% -10%, #d8ebea 0%, transparent 55%),
+    radial-gradient(ellipse 60% 40% at 100% 0%, #efe6d8 0%, transparent 50%),
+    var(--color-surface);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
