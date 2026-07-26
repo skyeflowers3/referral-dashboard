@@ -103,10 +103,6 @@ export function TrackerView() {
         <h1 className="font-display text-3xl font-light text-ink sm:text-4xl">
           Referral Tracker
         </h1>
-        <p className="text-sm text-ink-muted">
-          Every referral submission with status, method, and referring family. Click a
-          referrer name to see all families they&apos;ve referred.
-        </p>
       </div>
 
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

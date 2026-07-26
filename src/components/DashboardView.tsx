@@ -95,10 +95,6 @@ export function DashboardView() {
         <h1 className="font-display text-3xl font-light text-ink sm:text-4xl">
           Analytics Dashboard
         </h1>
-        <p className="text-sm text-ink-muted">
-          Participation, conversion, cost, retention, and referral-count mix across enrolled
-          families.
-        </p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -119,9 +115,6 @@ export function DashboardView() {
               style={{ width: `${Math.min(100, metrics.participationRate)}%` }}
             />
           </div>
-          <p className="mt-2 text-xs text-ink-muted">
-            Most families never refer — participation well below 100% by design.
-          </p>
         </MetricShell>
 
         <MetricShell
