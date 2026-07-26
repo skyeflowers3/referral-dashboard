@@ -2,6 +2,8 @@
 
 Demo dashboard for tracking family referrals and program analytics. Built with React, TypeScript, Tailwind CSS, and Recharts. Data is mocked to mirror a future Supabase schema.
 
+**Live demo:** https://gt-referral-dashboard.web.app
+
 ## Views
 
 - **Tracker** — Sortable/filterable table of individual referrals
@@ -23,4 +25,5 @@ Data access goes through `src/services/mockDataService.ts` (`getFamilies`, `getR
 npm install
 npm run dev
 npm run build
+npm run deploy   # build + deploy to Firebase Hosting
 ```
