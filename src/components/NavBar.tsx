@@ -12,10 +12,10 @@ const tabs: { id: AppView; label: string }[] = [
 
 export function NavBar({ activeView, onChange }: NavBarProps) {
   return (
-    <header className="border-b border-line bg-surface-elevated/90 backdrop-blur-sm">
+    <header className="border-b border-line bg-surface-elevated">
       <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
         <div>
-          <p className="font-display text-xl font-semibold tracking-tight text-ink sm:text-2xl">
+          <p className="font-display text-2xl font-light tracking-tight text-ink sm:text-[2rem]">
             GT Referral Program
           </p>
           <p className="mt-0.5 text-sm text-ink-muted">
@@ -24,7 +24,7 @@ export function NavBar({ activeView, onChange }: NavBarProps) {
         </div>
 
         <nav
-          className="inline-flex rounded-lg border border-line bg-surface p-1"
+          className="inline-flex gap-1 rounded-lg border border-line bg-surface-warm p-1"
           aria-label="Primary"
         >
           {tabs.map((tab) => {
@@ -35,10 +35,10 @@ export function NavBar({ activeView, onChange }: NavBarProps) {
                 type="button"
                 onClick={() => onChange(tab.id)}
                 className={[
-                  'rounded-md px-4 py-2 text-sm font-semibold transition-colors',
+                  'font-utility rounded-md px-4 py-2 text-sm font-medium uppercase tracking-[0.04em] transition-colors',
                   isActive
-                    ? 'bg-accent text-white shadow-sm'
-                    : 'text-ink-muted hover:bg-white hover:text-ink',
+                    ? 'border border-gold-light bg-accent-soft text-navy'
+                    : 'border border-transparent text-ink-muted hover:bg-surface-elevated hover:text-ink',
                 ].join(' ')}
                 aria-current={isActive ? 'page' : undefined}
               >

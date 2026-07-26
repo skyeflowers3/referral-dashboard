@@ -1,19 +1,41 @@
 @import "tailwindcss";
+@import "@fontsource-variable/literata";
+@import "@fontsource-variable/inter-tight";
+@import "@fontsource-variable/inconsolata";
 
 @theme {
-  --font-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Fraunces", ui-serif, Georgia, serif;
-  --color-ink: #1a2332;
-  --color-ink-muted: #5a6a7e;
-  --color-surface: #f6f3ee;
+  --font-sans: "Inter Tight Variable", "Segoe UI", system-ui, sans-serif;
+  --font-display: "Literata Variable", "Palatino Linotype", Palatino, Georgia, serif;
+  --font-utility: "Inconsolata Variable", ui-monospace, Consolas, monospace;
+
+  --color-ink: #001117;
+  --color-ink-soft: #33505c;
+  --color-ink-muted: #4a6470;
+  --color-surface: #fcf4ef;
+  --color-surface-warm: #f8e8de;
+  --color-surface-strong: #f5ddcd;
+  --color-surface-selected: #ebba9b;
   --color-surface-elevated: #ffffff;
-  --color-line: #e2ddd4;
-  --color-accent: #0d6e6e;
-  --color-accent-soft: #e6f3f3;
-  --color-accent-strong: #0a5555;
-  --color-warn: #b45309;
-  --color-success: #15803d;
-  --color-info: #1d4ed8;
+  --color-line: #ecd9cb;
+  --color-line-strong: #cac6c4;
+  --color-accent: #002a3a;
+  --color-accent-hover: #001117;
+  --color-accent-soft: #f5ddcd;
+  --color-gold: #e48b53;
+  --color-gold-deep: #ab683e;
+  --color-gold-light: #ebba9b;
+  --color-navy: #002a3a;
+  --color-blue: #004f71;
+  --color-blue-dark: #003b5c;
+  --color-near-white: #fbfbfb;
+  --color-warn: #6f4526;
+  --color-success: #14384a;
+  --color-info: #2f5364;
+
+  --radius-xs: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --cut-br: 14px;
 }
 
 html,
@@ -26,10 +48,107 @@ body {
   margin: 0;
   font-family: var(--font-sans);
   color: var(--color-ink);
-  background:
-    radial-gradient(ellipse 80% 50% at 10% -10%, #d8ebea 0%, transparent 55%),
-    radial-gradient(ellipse 60% 40% at 100% 0%, #efe6d8 0%, transparent 50%),
-    var(--color-surface);
+  background: var(--color-surface);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-display);
+  font-weight: 300;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+h1 {
+  letter-spacing: -0.03em;
+}
+
+p {
+  text-wrap: pretty;
+}
+
+:where(button, a, input, select, textarea, summary):focus-visible {
+  outline: 0.1875rem solid var(--color-blue);
+  outline-offset: 0.125rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Utility mark (tags, nav labels, badges) */
+.font-utility {
+  font-family: var(--font-utility);
+}
+
+.gt-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.45rem;
+  color: var(--color-ink-muted);
+  background: var(--color-surface-warm);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-xs);
+  font-family: var(--font-utility);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.gt-tag[data-status='invited'] {
+  color: var(--color-warn);
+  background: var(--color-surface-warm);
+  border-color: var(--color-gold-light);
+}
+
+.gt-tag[data-status='applied'] {
+  color: var(--color-blue);
+  background: var(--color-surface-elevated);
+  border-color: var(--color-gold-light);
+}
+
+.gt-tag[data-status='enrolled'] {
+  color: var(--color-ink);
+  background: var(--color-gold);
+  border-color: var(--color-gold-deep);
+}
+
+/* Chamfered navy control — one primary notch per screen when used */
+.gt-cut-br {
+  position: relative;
+  isolation: isolate;
+}
+
+.gt-cut-br::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background: var(--color-accent);
+  border-radius: var(--radius-md);
+  clip-path: polygon(
+    0 0,
+    100% 0,
+    100% calc(100% - var(--cut-br)),
+    calc(100% - var(--cut-br)) 100%,
+    0 100%
+  );
+  transition: background 150ms ease;
+}
+
+.gt-cut-br:hover::before {
+  background: var(--color-accent-hover);
 }
