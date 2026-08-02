@@ -1,19 +1,43 @@
-import { families, referrers, referrals, TIER_REWARD_COST } from '../data/mockData'
-import { syncRewardFulfillments } from '../data/rewardMilestones'
+import {
+  applications,
+  createSeedData,
+  families,
+  referrers,
+  referrals,
+  TIER_REWARD_COST,
+} from '../data/mockData'
+import {
+  emptyRewardFulfillments,
+  syncRewardFulfillments,
+} from '../data/rewardMilestones'
 import type {
+  Application,
   DashboardMetrics,
   Family,
   Referral,
   ReferralRow,
   ReferralStatus,
   Referrer,
+  ReferrerTier,
   RewardFulfillments,
   RewardMilestoneAt,
   RewardStatus,
+  SubmissionMethod,
 } from '../types'
 
 const AS_OF = new Date('2026-07-23T12:00:00.000Z')
-const STORAGE_KEY = 'gt-referral-mock-v3'
+const STORAGE_KEY = 'gt-referral-mock-v7'
+const VALID_STATUSES = new Set<ReferralStatus>([
+  'applied',
+  'accepted',
+  'declined',
+  'enrolled',
+])
+const VALID_METHODS = new Set<SubmissionMethod>([
+  'link',
+  'direct_submit',
+  'staff_attributed',
+])
 
 function delay<T>(value: T, ms = 80): Promise<T> {
   return new Promise((resolve) => {
@@ -36,7 +60,7 @@ function persist() {
   try {
     localStorage.setItem(
       STORAGE_KEY,
-      JSON.stringify({ families, referrers, referrals }),
+      JSON.stringify({ families, referrers, referrals, applications }),
     )
   } catch {
     // ignore quota / private mode
@@ -51,15 +75,35 @@ function hydrateFromStorage() {
       families: Family[]
       referrers: Referrer[]
       referrals: Referral[]
+      applications: Application[]
     }
-    if (!data.families?.length || !data.referrers?.length || !data.referrals?.length) {
+    if (
+      !data.families?.length ||
+      !data.referrers?.length ||
+      !data.referrals?.length ||
+      !data.applications?.length
+    ) {
+      return
+    }
+    if (data.families.some((f) => !f.referral_code)) {
       return
     }
     if (
       data.referrers.some(
         (r) =>
           typeof r.successful_referral_count !== 'number' ||
-          !r.reward_fulfillments?.[1],
+          !r.reward_fulfillments?.[1] ||
+          !r.referral_code,
+      )
+    ) {
+      return
+    }
+    if (
+      data.referrals.some(
+        (r) =>
+          !VALID_STATUSES.has(r.status) ||
+          !VALID_METHODS.has(r.submission_method) ||
+          !('application_id' in r),
       )
     ) {
       return
@@ -67,6 +111,7 @@ function hydrateFromStorage() {
     families.splice(0, families.length, ...data.families)
     referrers.splice(0, referrers.length, ...data.referrers)
     referrals.splice(0, referrals.length, ...data.referrals)
+    applications.splice(0, applications.length, ...data.applications)
   } catch {
     // ignore bad cache
   }
@@ -115,11 +160,76 @@ export interface ReferrerDetail {
   referrerId: string
   referrerName: string
   email: string
+  referralCode: string
   tier: number
   referralCount: number
   successfulReferralCount: number
   rewardFulfillments: RewardFulfillments
   referrals: ReferralRow[]
+}
+
+/** Enrolled family that can be credited as a referrer. */
+export interface AttributionOption {
+  familyId: string
+  name: string
+  referralCode: string
+}
+
+export interface CreateReferralInput {
+  /** Enrolled GT family being credited as the referrer */
+  familyId: string
+  /** In-progress HubSpot/SIS application being attributed */
+  applicationId: string
+  status?: ReferralStatus
+}
+
+export interface ApplicantOption {
+  id: string
+  lastName: string
+  email: string
+  status: ReferralStatus
+}
+
+function tierFromCount(count: number): ReferrerTier {
+  if (count >= 4) return 3
+  if (count >= 2) return 2
+  return 1
+}
+
+/** Normalize staff input into “The {Last} Family”. */
+export function familyNameFromLastName(lastName: string): string {
+  const cleaned = lastName
+    .trim()
+    .replace(/^The\s+/i, '')
+    .replace(/\s+Family$/i, '')
+    .trim()
+  if (!cleaned) return ''
+  const pretty = cleaned
+    .split(/\s+/)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(' ')
+  return `The ${pretty} Family`
+}
+
+function ensureReferrerForFamily(familyId: string): Referrer | null {
+  const family = families.find((f) => f.id === familyId)
+  if (!family) return null
+
+  const existing = referrers.find((r) => r.family_id === familyId)
+  if (existing) return existing
+
+  const referrer: Referrer = {
+    id: `ref_${String(referrers.length + 1).padStart(3, '0')}_${Date.now().toString(36)}`,
+    family_id: familyId,
+    referral_code: family.referral_code,
+    tier: 1,
+    referral_count: 0,
+    successful_referral_count: 0,
+    reward_fulfillments: emptyRewardFulfillments(),
+    created_at: new Date().toISOString(),
+  }
+  referrers.push(referrer)
+  return referrer
 }
 
 /** All enrolled GT families (mirrors `families` table). */
@@ -162,6 +272,7 @@ export async function getReferrerDetail(
     referrerId: referrer.id,
     referrerName: family?.name ?? 'Unknown',
     email: family?.email ?? '',
+    referralCode: family?.referral_code ?? referrer.referral_code,
     tier: referrer.tier,
     referralCount: referrer.referral_count,
     successfulReferralCount: referrer.successful_referral_count,
@@ -170,6 +281,92 @@ export async function getReferrerDetail(
   }
 
   return options?.immediate ? detail : delay(detail)
+}
+
+/** All enrolled families for staff attribution (existing + first-time referrers). */
+export async function getAttributionOptions(): Promise<AttributionOption[]> {
+  const options = families
+    .map((f) => ({
+      familyId: f.id,
+      name: f.name,
+      referralCode: f.referral_code,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
+  return delay(options)
+}
+
+/**
+ * In-progress applications not yet accepted/declined/enrolled,
+ * and not yet attributed to a referrer (mock HubSpot/SIS → Supabase).
+ */
+export async function getUnattributedApplicantOptions(): Promise<ApplicantOption[]> {
+  const options = applications
+    .filter((app) => app.status === 'applied' && !app.attributed_referral_id)
+    .map((app) => ({
+      id: app.id,
+      lastName: app.last_name,
+      email: app.email,
+      status: app.status,
+    }))
+    .sort((a, b) =>
+      a.lastName.localeCompare(b.lastName, undefined, { sensitivity: 'base' }),
+    )
+  return delay(options)
+}
+
+/**
+ * Staff creates a referral when a family applied without a code
+ * (or attributed after the fact). Defaults to Applied + Staff attributed.
+ * Creates a referrer row if this is the family's first referral.
+ */
+export async function createReferral(
+  input: CreateReferralInput,
+): Promise<ReferralRow[]> {
+  const referrer = ensureReferrerForFamily(input.familyId)
+  const application = applications.find((a) => a.id === input.applicationId)
+  if (!referrer || !application) return delay(buildReferralRows())
+  if (application.attributed_referral_id) return delay(buildReferralRows())
+  if (application.status !== 'applied') return delay(buildReferralRows())
+
+  const name = familyNameFromLastName(application.last_name)
+  if (!name) return delay(buildReferralRows())
+
+  const status: ReferralStatus = input.status ?? application.status
+  const id = `referral_${String(referrals.length + 1).padStart(3, '0')}_${Date.now().toString(36)}`
+
+  referrals.push({
+    id,
+    referrer_id: referrer.id,
+    referred_family_name: name,
+    referred_email: application.email,
+    status,
+    submission_method: 'staff_attributed',
+    created_at: new Date().toISOString(),
+    enrolled_at: status === 'enrolled' ? new Date().toISOString() : null,
+    application_id: application.id,
+  })
+
+  application.attributed_referral_id = id
+  referrer.referral_count = referrals.filter((r) => r.referrer_id === referrer.id).length
+  referrer.tier = tierFromCount(referrer.referral_count)
+  recomputeReferrerSuccess(referrer.id)
+  persist()
+  return delay(buildReferralRows())
+}
+
+/** Clear local edits and restore the original mock seed. */
+export async function resetMockData(): Promise<void> {
+  try {
+    localStorage.removeItem(STORAGE_KEY)
+  } catch {
+    // ignore
+  }
+  const seed = createSeedData()
+  families.splice(0, families.length, ...seed.families)
+  referrers.splice(0, referrers.length, ...seed.referrers)
+  referrals.splice(0, referrals.length, ...seed.referrals)
+  applications.splice(0, applications.length, ...seed.applications)
+  return delay(undefined)
 }
 
 /** Staff override: update a referral's admissions status. */

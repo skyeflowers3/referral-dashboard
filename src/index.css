@@ -108,15 +108,21 @@ p {
   white-space: nowrap;
 }
 
-.gt-tag[data-status='invited'] {
-  color: var(--color-warn);
+.gt-tag[data-status='applied'] {
+  color: var(--color-blue);
+  background: var(--color-surface-elevated);
+  border-color: var(--color-gold-light);
+}
+
+.gt-tag[data-status='accepted'] {
+  color: var(--color-success);
   background: var(--color-surface-warm);
   border-color: var(--color-gold-light);
 }
 
-.gt-tag[data-status='applied'] {
-  color: var(--color-blue);
-  background: var(--color-surface-elevated);
+.gt-tag[data-status='declined'] {
+  color: var(--color-warn);
+  background: var(--color-surface-warm);
   border-color: var(--color-gold-light);
 }
 

@@ -12,6 +12,7 @@ import type {
   RewardMilestoneAt,
   RewardStatus,
 } from '../types'
+import { useConfirm } from './ConfirmDialog'
 
 interface ReferrerDetailViewProps {
   referrerId: string
@@ -26,8 +27,14 @@ function formatDate(iso: string): string {
   })
 }
 
-function formatMethod(method: 'link' | 'direct_submit'): string {
-  return method === 'link' ? 'Link' : 'Direct submit'
+function formatMethod(method: 'link' | 'direct_submit' | 'staff_attributed'): string {
+  if (method === 'link') return 'Link'
+  if (method === 'staff_attributed') return 'Staff created'
+  return 'Direct submit'
+}
+
+function formatStatus(status: ReferralStatus): string {
+  return status.charAt(0).toUpperCase() + status.slice(1)
 }
 
 function formatRewardStatus(status: RewardStatus): string {
@@ -56,6 +63,7 @@ function draftsFromDetail(detail: ReferrerDetail): MilestoneDrafts {
 }
 
 export function ReferrerDetailView({ referrerId, onBack }: ReferrerDetailViewProps) {
+  const { confirm, dialog: confirmDialog } = useConfirm()
   const [detail, setDetail] = useState<ReferrerDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [savingMilestone, setSavingMilestone] = useState<RewardMilestoneAt | null>(null)
@@ -126,6 +134,12 @@ export function ReferrerDetailView({ referrerId, onBack }: ReferrerDetailViewPro
     const noteToSave = editingMilestones[atSuccessful]
       ? draft.notes.trim()
       : draft.notes.trim() || saved.notes
+    const ok = await confirm({
+      title: 'Save gift fulfillment?',
+      description: `Update the reward record for ${detail.referrerName} in the referral program.`,
+      confirmLabel: 'Save fulfillment',
+    })
+    if (!ok) return
     setSavingMilestone(atSuccessful)
     setSaveMessage(null)
     try {
@@ -139,7 +153,9 @@ export function ReferrerDetailView({ referrerId, onBack }: ReferrerDetailViewPro
         setDetail(next)
         setMilestoneDrafts(draftsFromDetail(next))
         setEditingMilestones((prev) => ({ ...prev, [atSuccessful]: false }))
-        setSaveMessage(`Saved fulfillment for ${atSuccessful} successful.`)
+        setSaveMessage(
+          `Saved fulfillment for ${atSuccessful === 4 ? '4+' : atSuccessful} successful enrollment${atSuccessful === 1 ? '' : 's'}.`,
+        )
       } else {
         setSaveMessage('Could not save fulfillment.')
       }
@@ -153,6 +169,12 @@ export function ReferrerDetailView({ referrerId, onBack }: ReferrerDetailViewPro
   async function deleteNote(atSuccessful: RewardMilestoneAt) {
     if (!detail) return
     const saved = detail.rewardFulfillments[atSuccessful]
+    const ok = await confirm({
+      title: 'Delete this note?',
+      description: 'This removes the note from the reward record.',
+      confirmLabel: 'Delete note',
+    })
+    if (!ok) return
     setSavingMilestone(atSuccessful)
     setSaveMessage(null)
     try {
@@ -179,6 +201,13 @@ export function ReferrerDetailView({ referrerId, onBack }: ReferrerDetailViewPro
   async function saveReferralStatus(referralId: string) {
     const status = statusDrafts[referralId]
     if (!status) return
+    const label = status.charAt(0).toUpperCase() + status.slice(1)
+    const ok = await confirm({
+      title: 'Update referral status?',
+      description: `Change this referral’s status to ${label}. This updates the record used for gifts and reporting.`,
+      confirmLabel: 'Update status',
+    })
+    if (!ok) return
     setSavingMilestone(null)
     setSaveMessage(null)
     try {
@@ -193,6 +222,7 @@ export function ReferrerDetailView({ referrerId, onBack }: ReferrerDetailViewPro
   if (loading) {
     return (
       <section className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
+        {confirmDialog}
         <p className="text-sm text-ink-muted">Loading referrer…</p>
       </section>
     )
@@ -201,6 +231,7 @@ export function ReferrerDetailView({ referrerId, onBack }: ReferrerDetailViewPro
   if (!detail || !milestoneDrafts) {
     return (
       <section className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
+        {confirmDialog}
         <button
           type="button"
           onClick={onBack}
@@ -217,6 +248,7 @@ export function ReferrerDetailView({ referrerId, onBack }: ReferrerDetailViewPro
 
   return (
     <section className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
+      {confirmDialog}
       <button
         type="button"
         onClick={onBack}
@@ -230,6 +262,14 @@ export function ReferrerDetailView({ referrerId, onBack }: ReferrerDetailViewPro
           {detail.referrerName}
         </h1>
         <p className="mt-1 text-sm text-ink-muted">{detail.email}</p>
+        <p className="mt-2 text-sm text-ink">
+          <span className="font-utility text-xs font-semibold uppercase tracking-[0.03em] text-ink-muted">
+            Referral code{' '}
+          </span>
+          <span className="font-utility text-base font-semibold tracking-wide">
+            {detail.referralCode}
+          </span>
+        </p>
       </div>
 
       <div className="mb-6 grid gap-3 sm:grid-cols-2">
@@ -281,7 +321,8 @@ export function ReferrerDetailView({ referrerId, onBack }: ReferrerDetailViewPro
                 >
                   <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                     <p className="font-utility text-xs font-semibold uppercase tracking-[0.03em] text-ink-muted">
-                      At {at} successful{at === 4 ? '+' : ''}
+                      {at === 4 ? '4+' : at} successful enrollment
+                      {at === 1 ? '' : 's'}
                     </p>
                     <span className="gt-tag" data-reward={saved.status}>
                       {formatRewardStatus(saved.status)}
@@ -453,7 +494,7 @@ export function ReferrerDetailView({ referrerId, onBack }: ReferrerDetailViewPro
                   </td>
                   <td className="px-4 py-3">
                     <span className="gt-tag" data-status={row.status}>
-                      {row.status}
+                      {formatStatus(row.status)}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-ink-muted">
@@ -474,8 +515,9 @@ export function ReferrerDetailView({ referrerId, onBack }: ReferrerDetailViewPro
                         }
                         className="rounded-md border border-line-strong bg-surface px-2 py-1.5 text-xs text-ink outline-none"
                       >
-                        <option value="invited">Invited</option>
                         <option value="applied">Applied</option>
+                        <option value="accepted">Accepted</option>
+                        <option value="declined">Declined</option>
                         <option value="enrolled">Enrolled</option>
                       </select>
                       <button

@@ -1,5 +1,6 @@
 import { emptyRewardFulfillments, syncRewardFulfillments } from './rewardMilestones'
 import type {
+  Application,
   Family,
   Referral,
   Referrer,
@@ -61,17 +62,25 @@ function buildMockData(): {
   families: Family[]
   referrers: Referrer[]
   referrals: Referral[]
+  applications: Application[]
 } {
   const baseEnroll = new Date('2024-01-15T12:00:00.000Z')
   const families: Family[] = []
 
-  // 150 enrolled GT families
+  function referralCodeFor(name: string, idx: number): string {
+    const last = name.replace(/^The\s+/i, '').split(/\s+/)[0] ?? 'FAMILY'
+    const base = last.replace(/[^A-Za-z]/g, '').toUpperCase().slice(0, 6)
+    return `${base}${String(idx + 1).padStart(2, '0')}`
+  }
+
+  // 150 enrolled GT families — each already has a referral code
   for (let i = 1; i <= 150; i++) {
     const name = familyName(i)
     families.push({
       id: `fam_${pad(i)}`,
       name,
       email: emailFor(name, i),
+      referral_code: referralCodeFor(name, i - 1),
       enrolled_at: dateOffset(baseEnroll, (i * 3) % 520),
       is_referred: false,
       referred_by_id: null,
@@ -102,9 +111,11 @@ function buildMockData(): {
   // Placeholder referrers; successful counts + rewards filled after referrals are built
   const referrers: Referrer[] = referrerFamilyIndices.map((fi, idx) => {
     const referralCount = countsByIndex[fi]
+    const family = families[fi - 1]
     return {
       id: `ref_${pad(idx + 1)}`,
       family_id: `fam_${pad(fi)}`,
+      referral_code: family.referral_code,
       tier: tierFromCount(referralCount),
       referral_count: referralCount,
       successful_referral_count: 0,
@@ -113,16 +124,17 @@ function buildMockData(): {
     }
   })
 
-  // Status mix sized for ~37 referrals (~27% enrolled)
+  // Status mix: Applied → Accepted / Declined / Enrolled (no Invited)
   const statuses: ReferralStatus[] = [
     'enrolled', 'enrolled', 'enrolled', 'enrolled', 'enrolled',
     'enrolled', 'enrolled', 'enrolled', 'enrolled', 'enrolled',
+    'accepted', 'accepted', 'accepted', 'accepted', 'accepted',
+    'accepted', 'accepted',
     'applied', 'applied', 'applied', 'applied', 'applied',
     'applied', 'applied', 'applied', 'applied',
-    'invited', 'invited', 'invited', 'invited', 'invited',
-    'invited', 'invited', 'invited', 'invited', 'invited',
-    'invited', 'invited', 'invited', 'invited', 'invited',
-    'invited', 'invited', 'invited',
+    'declined', 'declined', 'declined', 'declined', 'declined',
+    'declined', 'declined', 'declined', 'declined', 'declined',
+    'declined',
   ]
 
   const methods: SubmissionMethod[] = [
@@ -155,7 +167,7 @@ function buildMockData(): {
   for (const referrer of referrers) {
     const count = referrer.referral_count
     for (let j = 0; j < count; j++) {
-      const status = statuses[referralNum] ?? 'invited'
+      const status = statuses[referralNum] ?? 'applied'
       const method = methods[referralNum] ?? 'link'
       const created = dateOffset(new Date(referrer.created_at), 5 + j * 14 + (referralNum % 5))
       const enrolledAt =
@@ -173,10 +185,26 @@ function buildMockData(): {
         submission_method: method,
         created_at: created,
         enrolled_at: enrolledAt,
+        application_id: null,
       })
       referralNum++
     }
   }
+
+  // Unattributed in-progress HubSpot/SIS applications (Applied only — no code used)
+  const openApplicantLastNames = [
+    'Rivera', 'Nguyen', 'Patel', 'Brooks', 'Nakamura',
+    'Okafor', 'Singh', 'Costa', 'Bergstrom', 'Diallo',
+    'Hsu', 'Moreau',
+  ]
+  const applications: Application[] = openApplicantLastNames.map((last, idx) => ({
+    id: `app_${pad(idx + 1)}`,
+    last_name: last,
+    email: `${last.toLowerCase()}${idx + 1}@example.com`,
+    status: 'applied',
+    attributed_referral_id: null,
+    created_at: dateOffset(baseEnroll, 400 + idx * 3),
+  }))
 
   // Credit successful (enrolled) referrals and seed reward fulfillment state
   const enrolledByReferrer = new Map<string, number>()
@@ -255,10 +283,15 @@ function buildMockData(): {
     }
   })
 
-  return { families, referrers, referrals }
+  return { families, referrers, referrals, applications }
 }
 
-export const { families, referrers, referrals } = buildMockData()
+export const { families, referrers, referrals, applications } = buildMockData()
+
+/** Fresh seed for demo reset (does not mutate the live arrays). */
+export function createSeedData() {
+  return buildMockData()
+}
 
 /** Assumed reward cost by referrer tier (USD). */
 export const TIER_REWARD_COST: Record<ReferrerTier, number> = {

@@ -1,6 +1,16 @@
 import { useEffect, useMemo, useState } from 'react'
-import { getReferralRows } from '../services/mockDataService'
+import {
+  createReferral,
+  getAttributionOptions,
+  getReferralRows,
+  getUnattributedApplicantOptions,
+  resetMockData,
+  type ApplicantOption,
+  type AttributionOption,
+} from '../services/mockDataService'
 import type { ReferralRow, ReferralStatus } from '../types'
+import { useConfirm } from './ConfirmDialog'
+import { SearchSelect } from './SearchSelect'
 
 type SortKey =
   | 'referredFamilyName'
@@ -24,16 +34,35 @@ function formatDate(iso: string): string {
 }
 
 function formatMethod(method: ReferralRow['submissionMethod']): string {
-  return method === 'link' ? 'Link' : 'Direct submit'
+  if (method === 'link') return 'Link'
+  if (method === 'staff_attributed') return 'Staff created'
+  return 'Direct submit'
+}
+
+function formatStatus(status: ReferralStatus): string {
+  return status.charAt(0).toUpperCase() + status.slice(1)
 }
 
 export function TrackerView({ onOpenReferrer }: TrackerViewProps) {
+  const { confirm, dialog: confirmDialog } = useConfirm()
   const [rows, setRows] = useState<ReferralRow[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [sortKey, setSortKey] = useState<SortKey>('createdAt')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
+
+  const [showAdd, setShowAdd] = useState(false)
+  const [attributionOptions, setAttributionOptions] = useState<AttributionOption[]>(
+    [],
+  )
+  const [applicantOptions, setApplicantOptions] = useState<ApplicantOption[]>([])
+  const [familyId, setFamilyId] = useState('')
+  const [applicationId, setApplicationId] = useState('')
+  const [newStatus, setNewStatus] = useState<ReferralStatus>('applied')
+  const [saving, setSaving] = useState(false)
+  const [resetting, setResetting] = useState(false)
+  const [formError, setFormError] = useState('')
 
   useEffect(() => {
     let cancelled = false
@@ -48,6 +77,41 @@ export function TrackerView({ onOpenReferrer }: TrackerViewProps) {
       cancelled = true
     }
   }, [])
+
+  useEffect(() => {
+    if (!showAdd) return
+    let cancelled = false
+    Promise.all([getAttributionOptions(), getUnattributedApplicantOptions()]).then(
+      ([families, applicants]) => {
+        if (cancelled) return
+        setAttributionOptions(families)
+        setApplicantOptions(applicants)
+      },
+    )
+    return () => {
+      cancelled = true
+    }
+  }, [showAdd])
+
+  const referrerSelectOptions = useMemo(
+    () =>
+      attributionOptions.map((opt) => ({
+        id: opt.familyId,
+        primary: opt.name,
+        secondary: opt.referralCode,
+      })),
+    [attributionOptions],
+  )
+
+  const applicantSelectOptions = useMemo(
+    () =>
+      applicantOptions.map((opt) => ({
+        id: opt.id,
+        primary: opt.lastName,
+        secondary: opt.email,
+      })),
+    [applicantOptions],
+  )
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -86,16 +150,172 @@ export function TrackerView({ onOpenReferrer }: TrackerViewProps) {
     return sortDir === 'asc' ? ' ↑' : ' ↓'
   }
 
+  function resetForm() {
+    setApplicationId('')
+    setNewStatus('applied')
+    setFormError('')
+    setFamilyId('')
+  }
+
+  async function submitAddReferral(e: React.FormEvent) {
+    e.preventDefault()
+    if (!familyId || !applicationId) {
+      setFormError('Referrer and applicant are required.')
+      return
+    }
+    const referrer = attributionOptions.find((o) => o.familyId === familyId)
+    const applicant = applicantOptions.find((a) => a.id === applicationId)
+    const ok = await confirm({
+      title: 'Create this referral?',
+      description: `Credit ${referrer?.name ?? 'this family'} for ${
+        applicant ? `the ${applicant.lastName} application` : 'this application'
+      }. This creates a referral in the program records.`,
+      confirmLabel: 'Create referral',
+    })
+    if (!ok) return
+
+    setSaving(true)
+    setFormError('')
+    try {
+      const next = await createReferral({
+        familyId,
+        applicationId,
+        status: newStatus,
+      })
+      setRows(next)
+      setShowAdd(false)
+      resetForm()
+    } catch {
+      setFormError('Could not add referral.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleResetDemo() {
+    const ok = await confirm({
+      title: 'Reset demo data?',
+      description:
+        'This clears local edits and restores the original mock dataset used for demos.',
+      confirmLabel: 'Reset demo data',
+    })
+    if (!ok) return
+    setResetting(true)
+    try {
+      await resetMockData()
+      window.location.reload()
+    } catch {
+      setResetting(false)
+    }
+  }
+
   return (
     <section className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
-      <div className="mb-6 flex flex-col gap-1">
-        <h1 className="font-display text-3xl font-light text-ink sm:text-4xl">
-          Referral Tracker
-        </h1>
-        <p className="text-sm text-ink-muted">
-          Click a referrer to open their page with past referrals and gift status.
-        </p>
+      {confirmDialog}
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div className="flex flex-col gap-1">
+          <h1 className="font-display text-3xl font-light text-ink sm:text-4xl">
+            Referral Tracker
+          </h1>
+          <p className="text-sm text-ink-muted">
+            Click a referrer to open their page with past referrals and gift status.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            resetForm()
+            setShowAdd(true)
+          }}
+          className="shrink-0 self-start rounded-md bg-navy px-4 py-2.5 text-sm font-semibold text-white sm:self-auto"
+        >
+          Add referral
+        </button>
       </div>
+
+      {showAdd && (
+        <form
+          onSubmit={(e) => void submitAddReferral(e)}
+          className="mb-6 rounded-lg border border-line bg-surface-elevated p-4"
+        >
+          <h2 className="mb-1 font-sans text-sm font-semibold text-ink">
+            Add referral
+          </h2>
+          <p className="mb-4 text-sm text-ink-muted">
+            Create a referral from an in-progress application (applied without a
+            referral code) and credit an enrolled family.
+          </p>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="block text-sm sm:col-span-2">
+              <span className="mb-1 block font-semibold text-ink">
+                Credit referrer (enrolled family)
+              </span>
+              <SearchSelect
+                options={referrerSelectOptions}
+                value={familyId}
+                onChange={setFamilyId}
+                placeholder="Search family or code…"
+                emptyMessage="No families match"
+              />
+            </label>
+
+            <label className="block text-sm sm:col-span-2">
+              <span className="mb-1 block font-semibold text-ink">
+                Applicant (in progress)
+              </span>
+              <SearchSelect
+                options={applicantSelectOptions}
+                value={applicationId}
+                onChange={setApplicationId}
+                placeholder="Search last name or email…"
+                emptyMessage="No open applications match"
+              />
+            </label>
+
+            <label className="block text-sm">
+              <span className="mb-1 block font-semibold text-ink">Status</span>
+              <select
+                value={newStatus}
+                onChange={(e) => setNewStatus(e.target.value as ReferralStatus)}
+                className="w-full rounded-md border border-line-strong bg-surface px-3 py-2.5 text-sm text-ink outline-none"
+              >
+                <option value="applied">Applied</option>
+                <option value="accepted">Accepted</option>
+                <option value="declined">Declined</option>
+                <option value="enrolled">Enrolled</option>
+              </select>
+            </label>
+          </div>
+
+          {formError && (
+            <p className="mt-3 text-sm text-warn" role="alert">
+              {formError}
+            </p>
+          )}
+
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button
+              type="submit"
+              disabled={saving}
+              className="rounded-md bg-navy px-4 py-2 text-sm font-semibold text-white disabled:opacity-40"
+            >
+              {saving ? 'Saving…' : 'Save referral'}
+            </button>
+            <button
+              type="button"
+              disabled={saving}
+              onClick={() => {
+                setShowAdd(false)
+                resetForm()
+              }}
+              className="rounded-md border border-line-strong bg-surface px-4 py-2 text-sm font-semibold text-ink disabled:opacity-40"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
 
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <label className="relative block w-full sm:max-w-xs">
@@ -119,8 +339,9 @@ export function TrackerView({ onOpenReferrer }: TrackerViewProps) {
             className="rounded-md border border-line-strong bg-surface-elevated px-3 py-2.5 text-sm font-medium text-ink outline-none"
           >
             <option value="all">All statuses</option>
-            <option value="invited">Invited</option>
             <option value="applied">Applied</option>
+            <option value="accepted">Accepted</option>
+            <option value="declined">Declined</option>
             <option value="enrolled">Enrolled</option>
           </select>
         </label>
@@ -188,7 +409,7 @@ export function TrackerView({ onOpenReferrer }: TrackerViewProps) {
                     </td>
                     <td className="px-4 py-3">
                       <span className="gt-tag" data-status={row.status}>
-                        {row.status}
+                        {formatStatus(row.status)}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-ink-muted">
@@ -203,8 +424,18 @@ export function TrackerView({ onOpenReferrer }: TrackerViewProps) {
           </table>
         </div>
         {!loading && (
-          <div className="border-t border-line bg-surface-warm px-4 py-3 text-xs text-ink-muted">
-            Showing {filtered.length} of {rows.length} referrals
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line bg-surface-warm px-4 py-3 text-xs text-ink-muted">
+            <span>
+              Showing {filtered.length} of {rows.length} referrals
+            </span>
+            <button
+              type="button"
+              disabled={resetting}
+              onClick={() => void handleResetDemo()}
+              className="font-semibold text-blue underline-offset-2 hover:text-navy hover:underline disabled:opacity-40"
+            >
+              {resetting ? 'Resetting…' : 'Reset demo data'}
+            </button>
           </div>
         )}
       </div>
