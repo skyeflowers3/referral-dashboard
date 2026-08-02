@@ -1,6 +1,15 @@
 export type ReferralStatus = 'invited' | 'applied' | 'enrolled'
 export type SubmissionMethod = 'link' | 'direct_submit'
 export type ReferrerTier = 1 | 2 | 3
+export type RewardStatus = 'not_eligible' | 'eligible' | 'claimed' | 'fulfilled'
+export type RewardMilestoneAt = 1 | 2 | 3 | 4
+
+export interface MilestoneFulfillment {
+  status: RewardStatus
+  notes: string
+}
+
+export type RewardFulfillments = Record<RewardMilestoneAt, MilestoneFulfillment>
 
 export interface Family {
   id: string
@@ -16,6 +25,10 @@ export interface Referrer {
   family_id: string
   tier: ReferrerTier
   referral_count: number
+  /** Successful enrollments credited to this referrer */
+  successful_referral_count: number
+  /** Per-milestone gift fulfillment (1 / 2 / 3 / 4+) */
+  reward_fulfillments: RewardFulfillments
   created_at: string
 }
 
@@ -34,10 +47,13 @@ export interface ReferralRow {
   id: string
   referredFamilyName: string
   referrerName: string
+  referrerId: string
   status: ReferralStatus
   submissionMethod: SubmissionMethod
   createdAt: string
   enrolledAt: string | null
+  successfulReferralCount: number
+  tier: ReferrerTier
 }
 
 export interface DashboardMetrics {

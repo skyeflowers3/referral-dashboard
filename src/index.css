@@ -126,6 +126,26 @@ p {
   border-color: var(--color-gold-deep);
 }
 
+.gt-tag[data-reward='not_eligible'] {
+  color: var(--color-ink-muted);
+}
+
+.gt-tag[data-reward='eligible'] {
+  color: var(--color-blue);
+  border-color: var(--color-gold-light);
+}
+
+.gt-tag[data-reward='claimed'] {
+  color: var(--color-warn);
+  border-color: var(--color-gold-light);
+}
+
+.gt-tag[data-reward='fulfilled'] {
+  color: var(--color-ink);
+  background: var(--color-gold);
+  border-color: var(--color-gold-deep);
+}
+
 /* Chamfered navy control — one primary notch per screen when used */
 .gt-cut-br {
   position: relative;

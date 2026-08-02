@@ -1,4 +1,12 @@
-import type { Family, Referral, Referrer, ReferrerTier, ReferralStatus, SubmissionMethod } from '../types'
+import { emptyRewardFulfillments, syncRewardFulfillments } from './rewardMilestones'
+import type {
+  Family,
+  Referral,
+  Referrer,
+  ReferrerTier,
+  ReferralStatus,
+  SubmissionMethod,
+} from '../types'
 
 const FIRST_NAMES = [
   'Amelia', 'Noah', 'Olivia', 'Liam', 'Emma', 'Oliver', 'Sophia', 'Elijah',
@@ -91,6 +99,7 @@ function buildMockData(): {
     return 1
   }
 
+  // Placeholder referrers; successful counts + rewards filled after referrals are built
   const referrers: Referrer[] = referrerFamilyIndices.map((fi, idx) => {
     const referralCount = countsByIndex[fi]
     return {
@@ -98,6 +107,8 @@ function buildMockData(): {
       family_id: `fam_${pad(fi)}`,
       tier: tierFromCount(referralCount),
       referral_count: referralCount,
+      successful_referral_count: 0,
+      reward_fulfillments: emptyRewardFulfillments(),
       created_at: dateOffset(baseEnroll, 30 + idx * 12),
     }
   })
@@ -166,6 +177,44 @@ function buildMockData(): {
       referralNum++
     }
   }
+
+  // Credit successful (enrolled) referrals and seed reward fulfillment state
+  const enrolledByReferrer = new Map<string, number>()
+  for (const referral of referrals) {
+    if (referral.status !== 'enrolled') continue
+    enrolledByReferrer.set(
+      referral.referrer_id,
+      (enrolledByReferrer.get(referral.referrer_id) ?? 0) + 1,
+    )
+  }
+
+  referrers.forEach((referrer, idx) => {
+    const successful = enrolledByReferrer.get(referrer.id) ?? 0
+    referrer.successful_referral_count = successful
+    referrer.reward_fulfillments = syncRewardFulfillments(
+      emptyRewardFulfillments(),
+      successful,
+    )
+    if (successful >= 1) {
+      if (idx % 3 === 0) {
+        referrer.reward_fulfillments[1] = {
+          status: 'fulfilled',
+          notes: 'GT-branded item mailed',
+        }
+      } else if (idx % 3 === 1) {
+        referrer.reward_fulfillments[1] = {
+          status: 'claimed',
+          notes: 'Awaiting fulfillment',
+        }
+      }
+    }
+    if (successful >= 2 && idx % 5 === 0) {
+      referrer.reward_fulfillments[2] = {
+        status: 'fulfilled',
+        notes: 'Coffee invite sent',
+      }
+    }
+  })
 
   // Mark some enrolled families as referred (from enrolled referrals + a few extras)
   // Use families that are NOT in the referrer set for is_referred targets

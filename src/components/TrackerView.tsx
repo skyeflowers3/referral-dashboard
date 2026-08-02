@@ -1,10 +1,19 @@
-import { Fragment, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { getReferralRows } from '../services/mockDataService'
 import type { ReferralRow, ReferralStatus } from '../types'
 
-type SortKey = 'referredFamilyName' | 'referrerName' | 'status' | 'submissionMethod' | 'createdAt'
+type SortKey =
+  | 'referredFamilyName'
+  | 'referrerName'
+  | 'status'
+  | 'submissionMethod'
+  | 'createdAt'
 type SortDir = 'asc' | 'desc'
 type StatusFilter = 'all' | ReferralStatus
+
+interface TrackerViewProps {
+  onOpenReferrer: (referrerId: string) => void
+}
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('en-US', {
@@ -18,14 +27,13 @@ function formatMethod(method: ReferralRow['submissionMethod']): string {
   return method === 'link' ? 'Link' : 'Direct submit'
 }
 
-export function TrackerView() {
+export function TrackerView({ onOpenReferrer }: TrackerViewProps) {
   const [rows, setRows] = useState<ReferralRow[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [sortKey, setSortKey] = useState<SortKey>('createdAt')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
-  const [expandedRowId, setExpandedRowId] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -64,21 +72,6 @@ export function TrackerView() {
     return next
   }, [rows, search, statusFilter, sortKey, sortDir])
 
-  const referralsByReferrer = useMemo(() => {
-    const map = new Map<string, ReferralRow[]>()
-    for (const row of rows) {
-      const list = map.get(row.referrerName) ?? []
-      list.push(row)
-      map.set(row.referrerName, list)
-    }
-    for (const list of map.values()) {
-      list.sort(
-        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-      )
-    }
-    return map
-  }, [rows])
-
   function toggleSort(key: SortKey) {
     if (sortKey === key) {
       setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
@@ -93,16 +86,15 @@ export function TrackerView() {
     return sortDir === 'asc' ? ' ↑' : ' ↓'
   }
 
-  function toggleReferrerPanel(rowId: string) {
-    setExpandedRowId((current) => (current === rowId ? null : rowId))
-  }
-
   return (
     <section className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
       <div className="mb-6 flex flex-col gap-1">
         <h1 className="font-display text-3xl font-light text-ink sm:text-4xl">
           Referral Tracker
         </h1>
+        <p className="text-sm text-ink-muted">
+          Click a referrer to open their page with past referrals and gift status.
+        </p>
       </div>
 
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -177,99 +169,36 @@ export function TrackerView() {
                 </tr>
               )}
               {!loading &&
-                filtered.map((row) => {
-                  const isExpanded = expandedRowId === row.id
-                  const referrerReferrals = referralsByReferrer.get(row.referrerName) ?? []
-
-                  return (
-                    <Fragment key={row.id}>
-                      <tr className="border-b border-line/80 hover:bg-surface-warm/70">
-                        <td className="px-4 py-3 font-medium text-ink">
-                          {row.referredFamilyName}
-                        </td>
-                        <td className="px-4 py-3">
-                          <button
-                            type="button"
-                            onClick={() => toggleReferrerPanel(row.id)}
-                            aria-expanded={isExpanded}
-                            className={[
-                              'inline-flex items-center gap-1 text-sm font-semibold underline-offset-2 transition-colors',
-                              isExpanded
-                                ? 'text-navy underline'
-                                : 'text-blue hover:text-navy hover:underline',
-                            ].join(' ')}
-                          >
-                            {row.referrerName}
-                            <span aria-hidden="true" className="text-xs font-normal text-ink-muted">
-                              {isExpanded ? '▴' : '▾'}
-                            </span>
-                          </button>
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className="gt-tag" data-status={row.status}>
-                            {row.status}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-ink-muted">
-                          {formatMethod(row.submissionMethod)}
-                        </td>
-                        <td className="px-4 py-3 text-ink-muted">
-                          {formatDate(row.createdAt)}
-                        </td>
-                      </tr>
-                      {isExpanded && (
-                        <tr className="border-b border-line/80">
-                          <td colSpan={5} className="bg-surface-warm px-4 py-3">
-                            <div className="rounded-md border border-line bg-surface-elevated p-3">
-                              <p className="font-utility mb-2 text-xs font-semibold uppercase tracking-[0.03em] text-ink-muted">
-                                All referrals by {row.referrerName} (
-                                {referrerReferrals.length})
-                              </p>
-                              <table className="min-w-full text-left text-sm">
-                                <thead className="text-ink-muted">
-                                  <tr>
-                                    <th className="pb-2 pr-4 font-sans text-xs font-semibold uppercase tracking-wide">
-                                      Referred family
-                                    </th>
-                                    <th className="pb-2 pr-4 font-sans text-xs font-semibold uppercase tracking-wide">
-                                      Status
-                                    </th>
-                                    <th className="pb-2 font-sans text-xs font-semibold uppercase tracking-wide">
-                                      Date referred
-                                    </th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {referrerReferrals.map((referral) => (
-                                    <tr
-                                      key={referral.id}
-                                      className="border-t border-line/70"
-                                    >
-                                      <td className="py-2 pr-4 font-medium text-ink">
-                                        {referral.referredFamilyName}
-                                      </td>
-                                      <td className="py-2 pr-4">
-                                        <span
-                                          className="gt-tag"
-                                          data-status={referral.status}
-                                        >
-                                          {referral.status}
-                                        </span>
-                                      </td>
-                                      <td className="py-2 text-ink-muted">
-                                        {formatDate(referral.createdAt)}
-                                      </td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </Fragment>
-                  )
-                })}
+                filtered.map((row) => (
+                  <tr
+                    key={row.id}
+                    className="border-b border-line/80 hover:bg-surface-warm/70"
+                  >
+                    <td className="px-4 py-3 font-medium text-ink">
+                      {row.referredFamilyName}
+                    </td>
+                    <td className="px-4 py-3">
+                      <button
+                        type="button"
+                        onClick={() => onOpenReferrer(row.referrerId)}
+                        className="text-sm font-semibold text-blue underline-offset-2 hover:text-navy hover:underline"
+                      >
+                        {row.referrerName}
+                      </button>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="gt-tag" data-status={row.status}>
+                        {row.status}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-ink-muted">
+                      {formatMethod(row.submissionMethod)}
+                    </td>
+                    <td className="px-4 py-3 text-ink-muted">
+                      {formatDate(row.createdAt)}
+                    </td>
+                  </tr>
+                ))}
             </tbody>
           </table>
         </div>
